@@ -1,0 +1,9 @@
+# External pdf's
+ext_docs/*.pdf
+
+# Pico firmware bins 
+*.uf2
+
+# OS junk files
+thumbs.db
+.DS_Store

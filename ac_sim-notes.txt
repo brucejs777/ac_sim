@@ -1,0 +1,17 @@
+			ac_sim-notes.txt
+
+	some SPDT analog switch IC's:
+DG333A - quad SPDT +-20V
+DG419 - +-4.5 to 20V analog, dedicated V+ digital		amz $ 
+ADG1419 - +-5 to 15V, 3V logic, Ron=2.1ohm
+ADG619/1219 SPDT +-5V, 3Vlogic, small
+ADG5233 - triple SPDT, modern
+ADG633 - same 	amz $ 
+ADG733 - 		amz $6.37/5 + 2.39 
+MAX394 - quad SPDT, +-2.7 TO 8v, TTL/CMOS logic
+MAX4619 - better 4053
+MAX4694 - quad SPDT +-5V, R-R 
+CD4053 - triple SPDT mux, Ron=80 to 150ohm
+
+	some video switch chips
+MAX4310/4313 -  2 channel SPDT mux-amp, +-5V

@@ -2,15 +2,9 @@
  * Copyright (c) 2026 Bruce J Snyder
  * License: MIT
  *
-ver 0.3; 2026.04.10: Expand to three sine waves with phase and amplitude. 
-    Add chan/level/phase in-place printout using ANSI - must set terminal to ANSI.
-    Add scope output to track main loop cycles; high when busy.
-    Add struct to hold PWM settings.
-ver 0.2; 2026.04.02: Create 60 Hz sine wave using PWM on GPIO 7 & 8.
-ver 0.1; 2026.03.19: Initial version in C.  
-    Use RP2350 PWM block & ISR to create one 60Hz sine wave on GPIO 0.  
-    Add another on GPIO 1.
-
+ * Notes: 
+ * added _USE_MATH_DEFINES in CMakeLists.txt for M_PI etc
+ * 
  */
 
 
@@ -18,36 +12,22 @@ ver 0.1; 2026.03.19: Initial version in C.
 #include "pico/stdlib.h"
 #include <string.h>
 #include "pico/time.h"
+#include "hardware/gpio.h"
 #include "hardware/irq.h"
 #include "hardware/pwm.h"
 //#include "cmcis_gcc.h"
-#include "math.h"
+#include <math.h>
+
+#include "app_io_pins.h"
+#include "scope_out.h"
+#include "app_math.h" 
 
 
-#define APP_PWM_PIN_0 6
-#define APP_PWM_PIN_1 7
-#define APP_PWM_PIN_2 8
-// scope on pin 20 is Pico2 GP15 = GPIO 15
-#define SCOPE_PIN_1 15
-
+ScopeOut scope;
 
 static short g_phi = 0;  // main PWM index for sine wave group 
 
-// set top to get pwm period (default 2^16 - 1)
-// set for 360deg * 2 steps per degree * 60 Hz = 43200 sample rate -> 3472.222 Hz
-// 150MHz / (3472.0 * 2 * 360) = 60.003840 Hz ;]
-const float F_2PI = 2.0f * (float) M_PI;
-const float f_deg_to_rad = F_2PI / 360.0f;
-const float f_rad_to_deg = 360.0f / F_2PI;
-
-// TODO: consolidate theese into runtime-changeable vars somewhere, due to 50 or 60 Hz choice
-uint16_t wrap_val = SYS_CLK_HZ / ((2*360)*60) - 1; 
-float pwm_50pct_level = 0.5f * wrap_val;
-short samps_per_deg = 2;
-float deg_per_samp = 1.0f / (float) samps_per_deg;
-short samps_per_cycle = 360 * samps_per_deg;  // 360 deg * 2 samp/deg 
-float steps_to_rads = F_2PI / samps_per_cycle;
-float rads_to_steps = 1.0f / steps_to_rads;
+SampRatePreCalc srpc;
 
 
 // TODO: make container struct for commonalities
@@ -67,23 +47,6 @@ typedef struct PwmChanInfo {
 PwmChanInfo g_pci[NUM_PWM_OUTPUTS];
 
 
-void config_scope_out() {
-    gpio_init(SCOPE_PIN_1);
-    gpio_set_dir(SCOPE_PIN_1, GPIO_OUT);
-    gpio_put(SCOPE_PIN_1, false);
-}
-
-
-void scope_out(bool hi) {
-    gpio_put(SCOPE_PIN_1, hi);
-}
-
-
-void scope_tog() {
-    gpio_xor_mask(1u << SCOPE_PIN_1);
-}
-
-
 void init_wave_params(PwmChanInfo pci[]) {
     /* Note: these pwm pins are paired into 'slices' dictated by hardware
     Each slice share a common counter & therefor a freq 
@@ -91,60 +54,34 @@ void init_wave_params(PwmChanInfo pci[]) {
     uint pin;
 
     pin = 0;
-    pci[pin].amplitude = 0.7f * 0.5 * (float) wrap_val;
+    pci[pin].amplitude = 0.7f * 0.5 * (float) srpc.wrap_val;
     pci[pin].phase = 0.0;
     pci[pin].io_pin = APP_PWM_PIN_0;
     pci[pin].chan = pwm_gpio_to_channel(pci[pin].io_pin);
     pci[pin].slice = pwm_gpio_to_slice_num(pci[pin].io_pin);
-    pci[pin].wrap = wrap_val;
+    pci[pin].wrap = srpc.wrap_val;
     pci[pin].clkdiv = 1.0;
     pin = 1;
-    pci[pin].amplitude = 0.5f * 0.5 *  (float) wrap_val;
+    pci[pin].amplitude = 0.5f * 0.5 *  (float) srpc.wrap_val;
     pci[pin].phase = f_deg_to_rad * 120.0f;
     pci[pin].io_pin = APP_PWM_PIN_1;
     pci[pin].chan = pwm_gpio_to_channel(pci[pin].io_pin);
     pci[pin].slice = pwm_gpio_to_slice_num(pci[pin].io_pin);
-    pci[pin].wrap = wrap_val;
+    pci[pin].wrap = srpc.wrap_val;
     pci[pin].clkdiv = 1.0;
     pin = 2;
-    pci[pin].amplitude = 0.3f * 0.5 *  (float) wrap_val;
+    pci[pin].amplitude = 0.3f * 0.5 *  (float) srpc.wrap_val;
     pci[pin].phase = f_deg_to_rad * 240.0f;
     pci[pin].io_pin = APP_PWM_PIN_2;
     pci[pin].chan = pwm_gpio_to_channel(pci[pin].io_pin);
     pci[pin].slice = pwm_gpio_to_slice_num(pci[pin].io_pin);
-    pci[pin].wrap = wrap_val;
+    pci[pin].wrap = srpc.wrap_val;
     pci[pin].clkdiv = 1.0;
 }
 
 
-/* faster sine funct
-    TBD; lookup table
-    angle from 0 to 2pi
- */
-float fast_sin(float angle) {
-    return sinf(angle);  //TODO: remove this and fix this func (phase issue)
-
-    static bool uninit = true;
-    float result;
-    float table[samps_per_cycle];
-    if (uninit) {
-        for (int i = 0; i < samps_per_cycle; ++i) {
-            table[i] = sinf(steps_to_rads * (float) i);
-        }
-
-        uninit = false;
-    }
-    // result = sinf(angle);
-    //angle = fmodf(angle + F_2PI, F_2PI);  // normalize > 0 then < 2pi
-    uint16_t index = (uint16_t) (rads_to_steps * angle );
-    result = table[index];
-
-    return result;
-}
-
-
 /* ISR to handle all 6 PWM counter re-loads - all share one pwm wrap irq */
-void on_pwm_wrap_sin() {
+void on_pwm_wrap() {
     float level;
     uint slice_num, channel_num;
 
@@ -152,15 +89,15 @@ void on_pwm_wrap_sin() {
     pwm_clear_irq(g_pci[0].slice);
 
     // calc current angle = time = phase;  may not be power of 2 and we don't like to / or %....
-    if (++g_phi >= samps_per_cycle) {
+    if (++g_phi >= srpc.samps_per_cycle) {
         g_phi = 0;
     }
 
     // set all the levels of all the channels of all the slices at once
     for (uint pin = 0; pin < NUM_PWM_OUTPUTS; ++pin) {
         // calc new function value f0(g_phi) 
-        level = pwm_50pct_level + 
-            g_pci[pin].amplitude * fast_sin((steps_to_rads * (float) g_phi) + 
+        level = srpc.pwm_50pct_level + 
+            g_pci[pin].amplitude * srpc.fast_sin((srpc.steps_to_rads * (float) g_phi) + 
             g_pci[pin].phase );
         pwm_set_chan_level(g_pci[pin].slice, g_pci[pin].chan, level);
     }
@@ -207,7 +144,7 @@ void config_app_pwm(PwmChanInfo pci[]) {
         en_mask |= 1u << pci[pin].slice;
     }
 
-    irq_set_exclusive_handler(PWM_DEFAULT_IRQ_NUM(), on_pwm_wrap_sin);
+    irq_set_exclusive_handler(PWM_DEFAULT_IRQ_NUM(), on_pwm_wrap);
     // TODO: find out why USB stdio interferes with PWM; this priority setting did not help
     // default pri for all is 0x80 out of 0xFF 
     uint32_t usb_priority = irq_get_priority(USBCTRL_IRQ);
@@ -252,11 +189,10 @@ int main() {
     sleep_ms(2000);  // takes time to init stdio 
     printf("\n\t\tApp: ac_sim_pico2w\n\n");
 
-    config_scope_out();
     // temp doing for debugging main(): TODO: REMOVEME 
     printf("Toggling scope pin\n");
     for (int x = 0; x < 20; ++x) {
-        scope_tog();
+        scope.toggle();
         sleep_ms(5);
     }
 
@@ -273,12 +209,12 @@ int main() {
     // Everything after this point happens in the PWM interrupt handler, so we
     // can twiddle our thumbs
     while (true) {
-        scope_out(true);
+        scope.bin_out(true);
         //print_spinner();
         print_channel_info();
         //tight_loop_contents();
         //__wfi();
-        scope_out(false);
+        scope.bin_out(false);
         sleep_ms(100);
     }
 }

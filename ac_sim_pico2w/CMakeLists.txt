@@ -35,7 +35,13 @@ pico_sdk_init()
 
 # Add executable. Default name is the project name, version 0.1
 
-add_executable(ac_sim_pico2w ac_sim_pico2w.cpp )
+add_executable(ac_sim_pico2w)
+
+target_sources(ac_sim_pico2w PRIVATE 
+    ac_sim_pico2w.cpp 
+    app_math.cpp
+    scope_out.cpp
+)
 
 pico_set_program_name(ac_sim_pico2w "ac_sim_pico2w")
 pico_set_program_version(ac_sim_pico2w "0.4")
@@ -52,6 +58,9 @@ target_link_libraries(ac_sim_pico2w
 target_include_directories(ac_sim_pico2w PRIVATE
         ${CMAKE_CURRENT_LIST_DIR}
 )
+
+# for math defines such as M_PI
+target_compile_definitions(${PROJECT_NAME} PRIVATE _USE_MATH_DEFINES)
 
 # Add any user requested libraries
 target_link_libraries(ac_sim_pico2w 

@@ -5,8 +5,7 @@
  * added _USE_MATH_DEFINES in CMakeLists.txt for M_PI etc
 */
 
-#ifndef APP_MATH_H
-#define APP_MATH_H 
+#pragma once
 
 #include <math.h>
 #include <cstdint>
@@ -15,9 +14,9 @@
 // set top to get pwm period (default 2^16 - 1)
 // set for 360deg * 2 steps per degree * 60 Hz = 43200 sample rate -> 3472.222 Hz
 // 150MHz / (3472.0 * 2 * 360) = 60.003840 Hz ;]
-const float F_2PI = 2.0f * (float) M_PI;
-const float f_deg_to_rad = F_2PI / 360.0f;
-const float f_rad_to_deg = 360.0f / F_2PI;
+constexpr float F_2PI = 2.0f * (float) M_PI;
+constexpr float f_deg_to_rad = F_2PI / 360.0f;
+constexpr float f_rad_to_deg = 360.0f / F_2PI;
 
 
 struct SampRatePreCalc {
@@ -42,5 +41,3 @@ struct SampRatePreCalc {
 
     float fast_sin(float angle);
 };
-
-#endif // APP_MATH_H 

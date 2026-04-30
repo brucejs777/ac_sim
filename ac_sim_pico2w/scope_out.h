@@ -1,5 +1,6 @@
-#ifndef SCOPE_OUT_H
-#define SCOPE_OUT_H
+/* scope_out.h */
+
+#pragma once
 
 #include "hardware/gpio.h"
 
@@ -14,5 +15,3 @@ public:
     void bin_out(bool hi);
     void toggle();
 }; 
-
-#endif // SCOPE_OUT_H 

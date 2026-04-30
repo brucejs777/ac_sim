@@ -43,8 +43,8 @@ typedef struct PwmChanInfo {
 } PwmChanInfo;  // pwm channel info 
 
 
-#define NUM_PWM_OUTPUTS 3
-PwmChanInfo g_pci[NUM_PWM_OUTPUTS];
+constexpr uint16_t kNumPwmOutputs =3;
+PwmChanInfo g_pci[kNumPwmOutputs];
 
 
 void init_wave_params(PwmChanInfo pci[]) {
@@ -56,7 +56,7 @@ void init_wave_params(PwmChanInfo pci[]) {
     pin = 0;
     pci[pin].amplitude = 0.7f * 0.5 * (float) srpc.wrap_val;
     pci[pin].phase = 0.0;
-    pci[pin].io_pin = APP_PWM_PIN_0;
+    pci[pin].io_pin = kAppPwmPin_0;
     pci[pin].chan = pwm_gpio_to_channel(pci[pin].io_pin);
     pci[pin].slice = pwm_gpio_to_slice_num(pci[pin].io_pin);
     pci[pin].wrap = srpc.wrap_val;
@@ -64,7 +64,7 @@ void init_wave_params(PwmChanInfo pci[]) {
     pin = 1;
     pci[pin].amplitude = 0.5f * 0.5 *  (float) srpc.wrap_val;
     pci[pin].phase = f_deg_to_rad * 120.0f;
-    pci[pin].io_pin = APP_PWM_PIN_1;
+    pci[pin].io_pin = kAppPwmPin_1;
     pci[pin].chan = pwm_gpio_to_channel(pci[pin].io_pin);
     pci[pin].slice = pwm_gpio_to_slice_num(pci[pin].io_pin);
     pci[pin].wrap = srpc.wrap_val;
@@ -72,7 +72,7 @@ void init_wave_params(PwmChanInfo pci[]) {
     pin = 2;
     pci[pin].amplitude = 0.3f * 0.5 *  (float) srpc.wrap_val;
     pci[pin].phase = f_deg_to_rad * 240.0f;
-    pci[pin].io_pin = APP_PWM_PIN_2;
+    pci[pin].io_pin = kAppPwmPin_2;
     pci[pin].chan = pwm_gpio_to_channel(pci[pin].io_pin);
     pci[pin].slice = pwm_gpio_to_slice_num(pci[pin].io_pin);
     pci[pin].wrap = srpc.wrap_val;
@@ -94,7 +94,7 @@ void on_pwm_wrap() {
     }
 
     // set all the levels of all the channels of all the slices at once
-    for (uint pin = 0; pin < NUM_PWM_OUTPUTS; ++pin) {
+    for (uint pin = 0; pin < kNumPwmOutputs; ++pin) {
         // calc new function value f0(g_phi) 
         level = srpc.pwm_50pct_level + 
             g_pci[pin].amplitude * srpc.fast_sin((srpc.steps_to_rads * (float) g_phi) + 
@@ -139,7 +139,7 @@ void config_pwm_chan(PwmChanInfo pci) {
 */
 void config_app_pwm(PwmChanInfo pci[]) {
     uint en_mask = 0u;
-    for (uint pin = 0; pin < NUM_PWM_OUTPUTS; ++pin) {
+    for (uint pin = 0; pin < kNumPwmOutputs; ++pin) {
         config_pwm_chan(pci[pin]);
         en_mask |= 1u << pci[pin].slice;
     }
@@ -169,12 +169,14 @@ void print_spinner() {
 }
 
 
+/* print the channel info for all pwm 
+TODO: use {fmt} */
 void print_channel_info() {
     // first time print blanks to make room elsewhere
     printf("\033[3A"); fflush(stdout);  // go up 3 lines
-    for (uint chan = 0; chan < NUM_PWM_OUTPUTS; ++chan) {
+    for (uint chan = 0; chan < kNumPwmOutputs; ++chan) {
         printf("\r\033[2K");  // erase line
-        printf("CHAN=%2d: \tLevel = %6.1f; \tPhase = %5.1f\n", 
+        printf("CHAN =%2d: \tLevel =%7.1f mV; \tPhase =%6.1f°\n", 
             chan, g_pci[chan].amplitude, f_rad_to_deg * g_pci[chan].phase);
     }
 }
@@ -204,7 +206,7 @@ int main() {
     sleep_ms(2000);
 
     printf("Entering main loop\n");
-    printf("\n\n\n\n\n"); fflush(stdout); // make room for chanel info display 
+    printf("\n\n\n\n\n"); fflush(stdout); // make room for channel info display 
 
     // Everything after this point happens in the PWM interrupt handler, so we
     // can twiddle our thumbs

@@ -7,3 +7,5 @@ ext_docs/*.pdf
 # OS junk files
 thumbs.db
 .DS_Store
+_JUNK/
+

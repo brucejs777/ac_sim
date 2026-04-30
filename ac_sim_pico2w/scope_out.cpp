@@ -14,17 +14,17 @@ ScopeOut::ScopeOut() {
 
 
 void ScopeOut::setup() {
-    gpio_init(SCOPE_PIN_1);
-    gpio_set_dir(SCOPE_PIN_1, GPIO_OUT);
-    gpio_put(SCOPE_PIN_1, false);
+    gpio_init(kScopePin_1);
+    gpio_set_dir(kScopePin_1, GPIO_OUT);
+    gpio_put(kScopePin_1, false);
 }
 
 
 void ScopeOut::bin_out(bool hi) {
-    gpio_put(SCOPE_PIN_1, hi);
+    gpio_put(kScopePin_1, hi);
 }
 
 
 void ScopeOut::toggle() {
-    gpio_xor_mask(1u << SCOPE_PIN_1);
+    gpio_xor_mask(1u << kScopePin_1);
 }

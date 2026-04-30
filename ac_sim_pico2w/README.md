@@ -3,6 +3,7 @@ ac_sim_pico2w
  * Copyright (c) 2026 Bruce J Snyder
  * License: MIT
  *
+ver 0.5; 2026.04.30: Changed some defines and consts
 ver 0.4; 2026.04.17: Convert to C++
 ver 0.3; 2026.04.10: Expand to three sine waves with phase and amplitude. 
     Add chan/level/phase in-place printout using ANSI - must set terminal to ANSI.

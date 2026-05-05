@@ -37,14 +37,14 @@ pico_sdk_init()
 
 add_executable(ac_sim_pico2w)
 
-target_sources(ac_sim_pico2w PRIVATE 
-    ac_sim_pico2w.cpp 
+target_sources(ac_sim_pico2w PRIVATE
+    ac_sim_pico2w.cpp
     app_math.cpp
     scope_out.cpp
 )
 
 pico_set_program_name(ac_sim_pico2w "ac_sim_pico2w")
-pico_set_program_version(ac_sim_pico2w "0.4")
+pico_set_program_version(ac_sim_pico2w "0.6")
 
 # Modify the below lines to enable/disable output over UART/USB
 pico_enable_stdio_uart(ac_sim_pico2w 1)
@@ -63,7 +63,7 @@ target_include_directories(ac_sim_pico2w PRIVATE
 target_compile_definitions(${PROJECT_NAME} PRIVATE _USE_MATH_DEFINES)
 
 # Add any user requested libraries
-target_link_libraries(ac_sim_pico2w 
+target_link_libraries(ac_sim_pico2w
         hardware_pwm
         )
 

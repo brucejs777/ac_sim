@@ -2,9 +2,9 @@
  * Copyright (c) 2026 Bruce J Snyder
  * License: MIT
  *
- * Notes: 
+ * Notes:
  * added _USE_MATH_DEFINES in CMakeLists.txt for M_PI etc
- * 
+ *
  */
 
 
@@ -20,27 +20,30 @@
 
 #include "app_io_pins.h"
 #include "scope_out.h"
-#include "app_math.h" 
+#include "app_math.h"
+#include "app_ansi.h"
 
+
+const uint32_t loop_period_ms = 100; // main loop repeat
 
 ScopeOut scope;
 
-static short g_phi = 0;  // main PWM index for sine wave group 
+static short g_phi = 0;  // main PWM index for sine wave group
 
 SampRatePreCalc srpc;
 
 
 // TODO: make container struct for commonalities
-// TODO: maybe use pwm config struct 
+// TODO: maybe use pwm config struct
 typedef struct PwmChanInfo {
     float amplitude;
     float phase;  // rads
     uint io_pin;
     uint chan;
-    uint slice;  // 
+    uint slice_num;  //
     uint16_t wrap;
     float clkdiv;
-} PwmChanInfo;  // pwm channel info 
+} PwmChanInfo;  // pwm channel info
 
 
 constexpr uint16_t kNumPwmOutputs =3;
@@ -49,7 +52,7 @@ PwmChanInfo g_pci[kNumPwmOutputs];
 
 void init_wave_params(PwmChanInfo pci[]) {
     /* Note: these pwm pins are paired into 'slices' dictated by hardware
-    Each slice share a common counter & therefor a freq 
+    Each slice share a common counter & therefor a freq
     Note: chan is 0 or 1, which half of the slice */
     uint pin;
 
@@ -58,7 +61,7 @@ void init_wave_params(PwmChanInfo pci[]) {
     pci[pin].phase = 0.0;
     pci[pin].io_pin = kAppPwmPin_0;
     pci[pin].chan = pwm_gpio_to_channel(pci[pin].io_pin);
-    pci[pin].slice = pwm_gpio_to_slice_num(pci[pin].io_pin);
+    pci[pin].slice_num = pwm_gpio_to_slice_num(pci[pin].io_pin);
     pci[pin].wrap = srpc.wrap_val;
     pci[pin].clkdiv = 1.0;
     pin = 1;
@@ -66,7 +69,7 @@ void init_wave_params(PwmChanInfo pci[]) {
     pci[pin].phase = f_deg_to_rad * 120.0f;
     pci[pin].io_pin = kAppPwmPin_1;
     pci[pin].chan = pwm_gpio_to_channel(pci[pin].io_pin);
-    pci[pin].slice = pwm_gpio_to_slice_num(pci[pin].io_pin);
+    pci[pin].slice_num = pwm_gpio_to_slice_num(pci[pin].io_pin);
     pci[pin].wrap = srpc.wrap_val;
     pci[pin].clkdiv = 1.0;
     pin = 2;
@@ -74,7 +77,7 @@ void init_wave_params(PwmChanInfo pci[]) {
     pci[pin].phase = f_deg_to_rad * 240.0f;
     pci[pin].io_pin = kAppPwmPin_2;
     pci[pin].chan = pwm_gpio_to_channel(pci[pin].io_pin);
-    pci[pin].slice = pwm_gpio_to_slice_num(pci[pin].io_pin);
+    pci[pin].slice_num = pwm_gpio_to_slice_num(pci[pin].io_pin);
     pci[pin].wrap = srpc.wrap_val;
     pci[pin].clkdiv = 1.0;
 }
@@ -86,7 +89,7 @@ void on_pwm_wrap() {
     uint slice_num, channel_num;
 
     // Clear the interrupt flag that brought us here
-    pwm_clear_irq(g_pci[0].slice);
+    pwm_clear_irq(g_pci[0].slice_num);
 
     // calc current angle = time = phase;  may not be power of 2 and we don't like to / or %....
     if (++g_phi >= srpc.samps_per_cycle) {
@@ -95,20 +98,20 @@ void on_pwm_wrap() {
 
     // set all the levels of all the channels of all the slices at once
     for (uint pin = 0; pin < kNumPwmOutputs; ++pin) {
-        // calc new function value f0(g_phi) 
-        level = srpc.pwm_50pct_level + 
-            g_pci[pin].amplitude * srpc.fast_sin((srpc.steps_to_rads * (float) g_phi) + 
+        // calc new function value f0(g_phi)
+        level = srpc.pwm_50pct_level +
+            g_pci[pin].amplitude * srpc.fast_sin((srpc.steps_to_rads * (float) g_phi) +
             g_pci[pin].phase );
-        pwm_set_chan_level(g_pci[pin].slice, g_pci[pin].chan, level);
+        pwm_set_chan_level(g_pci[pin].slice_num, g_pci[pin].chan, level);
     }
 }
 
 
 /*  config a pwm pin
-    all PWM slices share IRQ but each has a flag 
+    all PWM slices share IRQ but each has a flag
     DIS-ables IRQ and clears IRQ flag - enable IRQ AFTER this func */
 void config_pwm_chan(PwmChanInfo pci) {
-    pwm_clear_irq(pci.slice);
+    pwm_clear_irq(pci.slice_num);
     //pwm_set_irq_enabled(pci.slice, true);
 
     gpio_set_function(pci.io_pin, GPIO_FUNC_PWM);
@@ -116,14 +119,14 @@ void config_pwm_chan(PwmChanInfo pci) {
     pwm_config_set_wrap(&config, pci.wrap);
     pwm_config_set_clkdiv(&config, pci.clkdiv);
     //pwm_set_counter(pci.slice, 0);  // pwm_init does this
-    pwm_init(pci.slice, &config, true);
+    pwm_init(pci.slice_num, &config, true);
     // TODO: use pwm_set_mask_enabled for simultaneous ?
 
-    pwm_set_chan_level(pci.slice, pci.chan, pci.wrap >> 1); // set to Vdd/2 = 1.65 VDC
+    pwm_set_chan_level(pci.slice_num, pci.chan, pci.wrap >> 1); // set to Vdd/2 = 1.65 VDC
 }
 
 
-/*  setup GPIO as PWM for six channels for app.  
+/*  setup GPIO as PWM for six channels for app.
     sine of same period on all 6.
     phase, amplitude can be different per channel.
 
@@ -141,21 +144,21 @@ void config_app_pwm(PwmChanInfo pci[]) {
     uint en_mask = 0u;
     for (uint pin = 0; pin < kNumPwmOutputs; ++pin) {
         config_pwm_chan(pci[pin]);
-        en_mask |= 1u << pci[pin].slice;
+        en_mask |= 1u << pci[pin].slice_num;
     }
 
     irq_set_exclusive_handler(PWM_DEFAULT_IRQ_NUM(), on_pwm_wrap);
     // TODO: find out why USB stdio interferes with PWM; this priority setting did not help
-    // default pri for all is 0x80 out of 0xFF 
+    // default pri for all is 0x80 out of 0xFF
     uint32_t usb_priority = irq_get_priority(USBCTRL_IRQ);
     irq_set_priority(PWM_IRQ_WRAP, (usb_priority - 1) & 0xFF);
     irq_set_enabled(PWM_DEFAULT_IRQ_NUM(), true);
     pwm_set_mask_enabled(en_mask);
-    pwm_set_irq_enabled(g_pci[0].slice, true);
+    pwm_set_irq_enabled(g_pci[0].slice_num, true);
 }
 
 
-/* simple console spinner to let user know we're not stuck 
+/* simple console spinner to let user know we're not stuck
 put serial monitor of vsc into terminal mode for the \r to work */
 void print_spinner() {
     static int spin_idx = 0;
@@ -169,14 +172,14 @@ void print_spinner() {
 }
 
 
-/* print the channel info for all pwm 
+/* print the channel info for all pwm
 TODO: use {fmt} */
 void print_channel_info() {
     // first time print blanks to make room elsewhere
-    printf("\033[3A"); fflush(stdout);  // go up 3 lines
+    printf(ANSI_UP(3)); fflush(stdout);  // go up 3 lines
     for (uint chan = 0; chan < kNumPwmOutputs; ++chan) {
-        printf("\r\033[2K");  // erase line
-        printf("CHAN =%2d: \tLevel =%7.1f mV; \tPhase =%6.1f°\n", 
+        printf(ANSI_CLEAR_LINE);  // erase line
+        printf("CHAN =%2d: \tLevel =%7.1f mV; \tPhase =%6.1f°\n",
             chan, g_pci[chan].amplitude, f_rad_to_deg * g_pci[chan].phase);
     }
 }
@@ -188,10 +191,12 @@ int main() {
     // global PwmChanInfo pci;  // due to ISR not taking params
 
     stdio_init_all();
-    sleep_ms(2000);  // takes time to init stdio 
+    sleep_ms(2000);  // takes time to init stdio
+
+    printf(ANSI_CLEAR ANSI_HOME);
     printf("\n\t\tApp: ac_sim_pico2w\n\n");
 
-    // temp doing for debugging main(): TODO: REMOVEME 
+    // temp doing for debugging main(): TODO: REMOVEME
     printf("Toggling scope pin\n");
     for (int x = 0; x < 20; ++x) {
         scope.toggle();
@@ -206,17 +211,20 @@ int main() {
     sleep_ms(2000);
 
     printf("Entering main loop\n");
-    printf("\n\n\n\n\n"); fflush(stdout); // make room for channel info display 
+    printf(ANSI_DOWN(5)); fflush(stdout); // make room for channel info display
 
     // Everything after this point happens in the PWM interrupt handler, so we
     // can twiddle our thumbs
     while (true) {
+        absolute_time_t loop_start = get_absolute_time();
         scope.bin_out(true);
+
         //print_spinner();
         print_channel_info();
         //tight_loop_contents();
         //__wfi();
+
         scope.bin_out(false);
-        sleep_ms(100);
+        sleep_until(delayed_by_ms(loop_start, loop_period_ms));
     }
 }
